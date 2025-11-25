@@ -310,7 +310,6 @@ func createIndex(es *elasticsearch7.Client) error {
 func indexKeywordDoc(es *elasticsearch7.Client, rule TargetRule, keyword string, vec []float32) error {
 	// Flatten target object thành các field riêng biệt
 	doc := map[string]interface{}{
-		"rule_id":            rule.ID,
 		"id":                 rule.ID,
 		"original_keyword":   keyword,
 		"keyword_text":       keyword, // Để fuzzy search
@@ -339,18 +338,14 @@ func indexKeywordDoc(es *elasticsearch7.Client, rule TargetRule, keyword string,
 func buildESQuery(qvec []float32, variables map[string]TargetCriteria, minScore float64, query string) map[string]interface{} {
 	filterClauses := []interface{}{}
 
-	// Build filter clauses
 	for key, crit := range variables {
-		// Filter out empty string values
 		validValues := []interface{}{}
 		for _, v := range crit.Values {
-			// Convert to string and check if not empty
 			if strVal := fmt.Sprint(v); strVal != "" {
 				validValues = append(validValues, v)
 			}
 		}
 
-		// Skip if no valid values
 		if len(validValues) == 0 {
 			continue
 		}
@@ -380,16 +375,13 @@ func buildESQuery(qvec []float32, variables map[string]TargetCriteria, minScore 
 
 	normalizedQuery := query
 
-	// Determine the base query based on whether we have filters
 	var baseQuery map[string]interface{}
 
 	if len(filterClauses) > 0 {
-		// Use bool query with filters when we have filter criteria
 		baseQuery = map[string]interface{}{
 			"bool": map[string]interface{}{
 				"filter": filterClauses,
 				"should": []interface{}{
-					// Boost if fuzzy text matches
 					map[string]interface{}{
 						"match": map[string]interface{}{
 							"keyword_text": map[string]interface{}{
@@ -399,7 +391,6 @@ func buildESQuery(qvec []float32, variables map[string]TargetCriteria, minScore 
 							},
 						},
 					},
-					// Boost if normalized matches
 					map[string]interface{}{
 						"term": map[string]interface{}{
 							"keyword_normalized": map[string]interface{}{
@@ -413,13 +404,11 @@ func buildESQuery(qvec []float32, variables map[string]TargetCriteria, minScore 
 			},
 		}
 	} else {
-		// Use match_all when no filters are specified
 		baseQuery = map[string]interface{}{
 			"match_all": map[string]interface{}{},
 		}
 	}
 
-	// Build the final query with script_score
 	esQuery := map[string]interface{}{
 		"query": map[string]interface{}{
 			"script_score": map[string]interface{}{
@@ -436,7 +425,6 @@ func buildESQuery(qvec []float32, variables map[string]TargetCriteria, minScore 
 	esQuery["collapse"] = map[string]interface{}{
 		"field": "id",
 	}
-	// Only apply min_score if specified and > 0
 	if minScore > 0 {
 		esQuery["min_score"] = minScore
 	}
@@ -492,7 +480,7 @@ func main() {
 		}
 
 		log.Println("========================================")
-		log.Printf("Indexing Rule ID: %d", rule.ID)
+		log.Printf("Indexing ID ID: %d", rule.ID)
 		log.Printf("Target Criteria: %+v", rule.Target)
 
 		keyfield, ok := rule.Target["keyword"]
@@ -502,19 +490,19 @@ func main() {
 
 		indexed := 0
 		for _, kw := range keyfield.Values {
-			log.Printf("  - Processing keyword: %s", kw)
+			log.Printf("- Processing keyword: %s", kw)
 			vec, err := embedHandler(strings.TrimSpace(kw))
 			if err != nil {
-				log.Printf("    ERROR getting embedding: %v", err)
+				log.Printf("ERROR getting embedding: %v", err)
 				return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 			}
-			log.Printf("    Embedding vector length: %d", len(vec))
+			log.Printf("Embedding vector length: %d", len(vec))
 
 			if err := indexKeywordDoc(es, rule, kw, vec); err != nil {
-				log.Printf("    ERROR indexing: %v", err)
+				log.Printf("ERROR indexing: %v", err)
 				return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 			}
-			log.Printf("    ✓ Indexed successfully")
+			log.Printf("✓ Indexed successfully")
 			indexed++
 		}
 
@@ -536,7 +524,6 @@ func main() {
 			return c.Status(400).JSON(fiber.Map{"error": err.Error()})
 		}
 		// Default min_score = 0.5 (lỏng hơn để test)
-		// Sau khi test xong có thể tăng lên
 		if req.MinScore == 0 {
 			req.MinScore = 0.5 // Rất thấp để test, sau tăng lên 0.8-1.0
 		}
