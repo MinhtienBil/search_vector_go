@@ -1,4 +1,4 @@
-module searchvector
+module github.com/MinhtienBil/search_vector_go
 
 go 1.24.1
 

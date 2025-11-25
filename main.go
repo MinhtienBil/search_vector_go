@@ -1,4 +1,4 @@
-package main
+package search_vector_go
 
 import (
 	"bytes"
