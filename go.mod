@@ -1,4 +1,4 @@
-module github.com/MinhtienBil/search_vector_go
+module myapp
 
 go 1.24.1
 

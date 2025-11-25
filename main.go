@@ -1,4 +1,4 @@
-package search_vector_go
+package main
 
 import (
 	"bytes"
@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	elasticsearch7 "github.com/elastic/go-elasticsearch/v7"
+	"github.com/gofiber/fiber/v2"
 
 	"github.com/knights-analytics/hugot"
 	"github.com/knights-analytics/hugot/pipelines"
@@ -460,195 +463,195 @@ func findClosingBrace(s string) string {
 }
 
 // ---------- MAIN ----------
-// func main() {
-// 	cfg := elasticsearch7.Config{}
-// 	es, err := elasticsearch7.NewClient(cfg)
+func main() {
+	cfg := elasticsearch7.Config{}
+	es, err := elasticsearch7.NewClient(cfg)
 
-// 	server, err := initServer()
-// 	if err != nil {
-// 		log.Fatalf("❌ Failed to initialize server: %v", err)
-// 	}
-// 	defer server.Close()
+	server, err := initServer()
+	if err != nil {
+		log.Fatalf("❌ Failed to initialize server: %v", err)
+	}
+	defer server.Close()
 
-// 	if err != nil {
-// 		log.Fatalf("ES client error: %v", err)
-// 	}
+	if err != nil {
+		log.Fatalf("ES client error: %v", err)
+	}
 
-// 	if err := createIndex(es); err != nil {
-// 		log.Printf("warning creating index: %v", err)
-// 	}
+	if err := createIndex(es); err != nil {
+		log.Printf("warning creating index: %v", err)
+	}
 
-// 	app := fiber.New()
+	app := fiber.New()
 
-// 	app.Post("/target_rules", func(c *fiber.Ctx) error {
-// 		var rule TargetRule
-// 		if err := c.BodyParser(&rule); err != nil {
-// 			return c.Status(400).JSON(fiber.Map{"error": err.Error()})
-// 		}
+	app.Post("/target_rules", func(c *fiber.Ctx) error {
+		var rule TargetRule
+		if err := c.BodyParser(&rule); err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+		}
 
-// 		log.Println("========================================")
-// 		log.Printf("Indexing Rule ID: %d", rule.ID)
-// 		log.Printf("Target Criteria: %+v", rule.Target)
+		log.Println("========================================")
+		log.Printf("Indexing Rule ID: %d", rule.ID)
+		log.Printf("Target Criteria: %+v", rule.Target)
 
-// 		keyfield, ok := rule.Target["keyword"]
-// 		if !ok || len(keyfield.Values) == 0 {
-// 			return c.Status(400).JSON(fiber.Map{"error": "keyword missing"})
-// 		}
+		keyfield, ok := rule.Target["keyword"]
+		if !ok || len(keyfield.Values) == 0 {
+			return c.Status(400).JSON(fiber.Map{"error": "keyword missing"})
+		}
 
-// 		indexed := 0
-// 		for _, kw := range keyfield.Values {
-// 			log.Printf("  - Processing keyword: %s", kw)
-// 			vec, err := embedHandler(strings.TrimSpace(kw))
-// 			if err != nil {
-// 				log.Printf("    ERROR getting embedding: %v", err)
-// 				return c.Status(500).JSON(fiber.Map{"error": err.Error()})
-// 			}
-// 			log.Printf("    Embedding vector length: %d", len(vec))
+		indexed := 0
+		for _, kw := range keyfield.Values {
+			log.Printf("  - Processing keyword: %s", kw)
+			vec, err := embedHandler(strings.TrimSpace(kw))
+			if err != nil {
+				log.Printf("    ERROR getting embedding: %v", err)
+				return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+			}
+			log.Printf("    Embedding vector length: %d", len(vec))
 
-// 			if err := indexKeywordDoc(es, rule, kw, vec); err != nil {
-// 				log.Printf("    ERROR indexing: %v", err)
-// 				return c.Status(500).JSON(fiber.Map{"error": err.Error()})
-// 			}
-// 			log.Printf("    ✓ Indexed successfully")
-// 			indexed++
-// 		}
+			if err := indexKeywordDoc(es, rule, kw, vec); err != nil {
+				log.Printf("    ERROR indexing: %v", err)
+				return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+			}
+			log.Printf("    ✓ Indexed successfully")
+			indexed++
+		}
 
-// 		log.Printf("Total indexed: %d keywords", indexed)
-// 		log.Println("========================================")
+		log.Printf("Total indexed: %d keywords", indexed)
+		log.Println("========================================")
 
-// 		return c.JSON(fiber.Map{"message": "indexed", "id": rule.ID, "keywords": keyfield.Values, "count": indexed})
-// 	})
+		return c.JSON(fiber.Map{"message": "indexed", "id": rule.ID, "keywords": keyfield.Values, "count": indexed})
+	})
 
-// 	// POST /search
-// 	app.Post("/search", func(c *fiber.Ctx) error {
-// 		type SearchReq struct {
-// 			Query     string                    `json:"query"`
-// 			Variables map[string]TargetCriteria `json:"variables"`
-// 			MinScore  float64                   `json:"min_score"` // Ngưỡng similarity tối thiểu
-// 		}
-// 		var req SearchReq
-// 		if err := c.BodyParser(&req); err != nil {
-// 			return c.Status(400).JSON(fiber.Map{"error": err.Error()})
-// 		}
-// 		// Default min_score = 0.5 (lỏng hơn để test)
-// 		// Sau khi test xong có thể tăng lên
-// 		if req.MinScore == 0 {
-// 			req.MinScore = 0.5 // Rất thấp để test, sau tăng lên 0.8-1.0
-// 		}
+	// POST /search
+	app.Post("/search", func(c *fiber.Ctx) error {
+		type SearchReq struct {
+			Query     string                    `json:"query"`
+			Variables map[string]TargetCriteria `json:"variables"`
+			MinScore  float64                   `json:"min_score"` // Ngưỡng similarity tối thiểu
+		}
+		var req SearchReq
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+		}
+		// Default min_score = 0.5 (lỏng hơn để test)
+		// Sau khi test xong có thể tăng lên
+		if req.MinScore == 0 {
+			req.MinScore = 0.5 // Rất thấp để test, sau tăng lên 0.8-1.0
+		}
 
-// 		qvec, err := embedHandler(req.Query)
-// 		if err != nil {
-// 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
-// 		}
+		qvec, err := embedHandler(req.Query)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+		}
 
-// 		esq := buildESQuery(qvec, req.Variables, req.MinScore, req.Query)
-// 		body, _ := json.Marshal(esq)
+		esq := buildESQuery(qvec, req.Variables, req.MinScore, req.Query)
+		body, _ := json.Marshal(esq)
 
-// 		// Pretty print query để dễ đọc, nhưng truncate vector
-// 		var prettyQuery bytes.Buffer
-// 		json.Indent(&prettyQuery, body, "", "  ")
+		// Pretty print query để dễ đọc, nhưng truncate vector
+		var prettyQuery bytes.Buffer
+		json.Indent(&prettyQuery, body, "", "  ")
 
-// 		// Truncate vector trong log để dễ đọc
-// 		// prettyStr := prettyQuery.String()
-// 		// vectorStart := ""
-// 		// vectorEnd := ""
-// 		// if len(qvec) > 0 {
-// 		// 	vectorStart = fmt.Sprintf("[%.4f, %.4f, %.4f", qvec[0], qvec[1], qvec[2])
-// 		// 	vectorEnd = fmt.Sprintf("%.4f, %.4f, %.4f]", qvec[len(qvec)-3], qvec[len(qvec)-2], qvec[len(qvec)-1])
-// 		// }
+		// Truncate vector trong log để dễ đọc
+		// prettyStr := prettyQuery.String()
+		// vectorStart := ""
+		// vectorEnd := ""
+		// if len(qvec) > 0 {
+		// 	vectorStart = fmt.Sprintf("[%.4f, %.4f, %.4f", qvec[0], qvec[1], qvec[2])
+		// 	vectorEnd = fmt.Sprintf("%.4f, %.4f, %.4f]", qvec[len(qvec)-3], qvec[len(qvec)-2], qvec[len(qvec)-1])
+		// }
 
-// 		// log.Println("========================================")
-// 		// log.Printf("Search Query: %s", req.Query)
-// 		// log.Printf("Variables: %+v", req.Variables)
-// 		// log.Printf("Min Score Threshold: %.2f", req.MinScore)
-// 		// log.Printf("Query Vector: %s ... (384 dims) ... %s", vectorStart, vectorEnd)
-// 		// log.Println("----------------------------------------")
-// 		// log.Println("Elasticsearch Query (vector truncated for readability):")
+		// log.Println("========================================")
+		// log.Printf("Search Query: %s", req.Query)
+		// log.Printf("Variables: %+v", req.Variables)
+		// log.Printf("Min Score Threshold: %.2f", req.MinScore)
+		// log.Printf("Query Vector: %s ... (384 dims) ... %s", vectorStart, vectorEnd)
+		// log.Println("----------------------------------------")
+		// log.Println("Elasticsearch Query (vector truncated for readability):")
 
-// 		// // Replace long vector array with placeholder
-// 		// shortQuery := prettyStr
-// 		// if idx := findVectorInJSON(shortQuery); idx != -1 {
-// 		// 	shortQuery = shortQuery[:idx] + `"query_vector": ` + vectorStart + ` ... 378 more values ... ` + vectorEnd + `
-// 		//   }` + findClosingBrace(shortQuery[idx:])
-// 		// }
-// 		// log.Println(shortQuery)
-// 		// log.Println("----------------------------------------")
-// 		// log.Printf("To run in Kibana Dev Tools: GET /%s/_search", IndexName)
-// 		// log.Println("(Use full vector from /debug/test-similarity for exact replication)")
-// 		// log.Println("========================================")
+		// // Replace long vector array with placeholder
+		// shortQuery := prettyStr
+		// if idx := findVectorInJSON(shortQuery); idx != -1 {
+		// 	shortQuery = shortQuery[:idx] + `"query_vector": ` + vectorStart + ` ... 378 more values ... ` + vectorEnd + `
+		//   }` + findClosingBrace(shortQuery[idx:])
+		// }
+		// log.Println(shortQuery)
+		// log.Println("----------------------------------------")
+		// log.Printf("To run in Kibana Dev Tools: GET /%s/_search", IndexName)
+		// log.Println("(Use full vector from /debug/test-similarity for exact replication)")
+		// log.Println("========================================")
 
-// 		res, err := es.Search(
-// 			es.Search.WithIndex(IndexName),
-// 			es.Search.WithBody(bytes.NewReader(body)),
-// 		)
-// 		if err != nil {
-// 			log.Printf("ES Search Error: %v", err)
-// 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
-// 		}
-// 		defer res.Body.Close()
+		res, err := es.Search(
+			es.Search.WithIndex(IndexName),
+			es.Search.WithBody(bytes.NewReader(body)),
+		)
+		if err != nil {
+			log.Printf("ES Search Error: %v", err)
+			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+		}
+		defer res.Body.Close()
 
-// 		// Log response status
-// 		log.Printf("ES Response Status: %s", res.Status())
+		// Log response status
+		log.Printf("ES Response Status: %s", res.Status())
 
-// 		var out struct {
-// 			Hits struct {
-// 				Total struct {
-// 					Value int `json:"value"`
-// 				} `json:"total"`
-// 				Hits []struct {
-// 					Score  float64                `json:"_score"`
-// 					Source map[string]interface{} `json:"_source"`
-// 				} `json:"hits"`
-// 			} `json:"hits"`
-// 		}
-// 		if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
-// 			log.Printf("ES Response Decode Error: %v", err)
-// 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
-// 		}
+		var out struct {
+			Hits struct {
+				Total struct {
+					Value int `json:"value"`
+				} `json:"total"`
+				Hits []struct {
+					Score  float64                `json:"_score"`
+					Source map[string]interface{} `json:"_source"`
+				} `json:"hits"`
+			} `json:"hits"`
+		}
+		if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
+			log.Printf("ES Response Decode Error: %v", err)
+			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+		}
 
-// 		log.Printf("ES Total Hits: %d", out.Hits.Total.Value)
+		log.Printf("ES Total Hits: %d", out.Hits.Total.Value)
 
-// 		type R struct {
-// 			Keyword    string  `json:"keyword"`
-// 			Score      float64 `json:"score"`
-// 			Similarity float64 `json:"similarity"` // Thêm similarity % để dễ hiểu
-// 			RuleID     int     `json:"rule_id"`
-// 		}
-// 		results := []R{}
-// 		for _, h := range out.Hits.Hits {
-// 			kw, _ := h.Source["original_keyword"].(string)
-// 			rid := 0
-// 			if v, ok := h.Source["rule_id"].(float64); ok {
-// 				rid = int(v)
-// 			}
-// 			// Convert score về similarity percentage
-// 			similarity := (h.Score - 1.0) * 100 // cosineSimilarity + 1.0, so -1.0 to get original
-// 			results = append(results, R{
-// 				Keyword:    kw,
-// 				Score:      h.Score,
-// 				Similarity: similarity,
-// 				RuleID:     rid,
-// 			})
-// 			log.Printf("  - Keyword: %s, Score: %.4f, Similarity: %.2f%%, RuleID: %d", kw, h.Score, similarity, rid)
-// 		}
+		type R struct {
+			Keyword    string  `json:"keyword"`
+			Score      float64 `json:"score"`
+			Similarity float64 `json:"similarity"` // Thêm similarity % để dễ hiểu
+			RuleID     int     `json:"rule_id"`
+		}
+		results := []R{}
+		for _, h := range out.Hits.Hits {
+			kw, _ := h.Source["original_keyword"].(string)
+			rid := 0
+			if v, ok := h.Source["rule_id"].(float64); ok {
+				rid = int(v)
+			}
+			// Convert score về similarity percentage
+			similarity := (h.Score - 1.0) * 100 // cosineSimilarity + 1.0, so -1.0 to get original
+			results = append(results, R{
+				Keyword:    kw,
+				Score:      h.Score,
+				Similarity: similarity,
+				RuleID:     rid,
+			})
+			log.Printf("  - Keyword: %s, Score: %.4f, Similarity: %.2f%%, RuleID: %d", kw, h.Score, similarity, rid)
+		}
 
-// 		// Sort by score descending
-// 		sort.Slice(results, func(i, j int) bool {
-// 			return results[i].Score > results[j].Score
-// 		})
+		// Sort by score descending
+		sort.Slice(results, func(i, j int) bool {
+			return results[i].Score > results[j].Score
+		})
 
-// 		return c.JSON(fiber.Map{
-// 			"total":     len(results),
-// 			"results":   results,
-// 			"min_score": req.MinScore,
-// 			"query":     req.Query,
-// 		})
-// 	})
+		return c.JSON(fiber.Map{
+			"total":     len(results),
+			"results":   results,
+			"min_score": req.MinScore,
+			"query":     req.Query,
+		})
+	})
 
-// 	port := os.Getenv("PORT")
-// 	if port == "" {
-// 		port = "9000"
-// 	}
-// 	log.Printf("Listening on :%s", port)
-// 	log.Fatal(app.Listen(":" + port))
-// }
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "9000"
+	}
+	log.Printf("Listening on :%s", port)
+	log.Fatal(app.Listen(":" + port))
+}
