@@ -433,7 +433,9 @@ func buildESQuery(qvec []float32, variables map[string]TargetCriteria, minScore 
 			},
 		},
 	}
-
+	esQuery["collapse"] = map[string]interface{}{
+		"field": "id",
+	}
 	// Only apply min_score if specified and > 0
 	if minScore > 0 {
 		esQuery["min_score"] = minScore
@@ -548,8 +550,8 @@ func main() {
 		body, _ := json.Marshal(esq)
 
 		// Pretty print query để dễ đọc, nhưng truncate vector
-		var prettyQuery bytes.Buffer
-		json.Indent(&prettyQuery, body, "", "  ")
+		// var prettyQuery bytes.Buffer
+		// json.Indent(&prettyQuery, body, "", "  ")
 
 		// Truncate vector trong log để dễ đọc
 		// prettyStr := prettyQuery.String()
